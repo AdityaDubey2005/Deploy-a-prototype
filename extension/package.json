@@ -1,0 +1,115 @@
+{
+    "name": "devops-agent-extension",
+    "displayName": "DevOps AI Agent",
+    "description": "Agentic AI assistant for DevOps tasks including code review, testing, deployment, and incident management",
+    "version": "1.0.0",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other",
+        "Testing",
+        "Linters"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "devops-agent.showPanel",
+                "title": "DevOps Agent: Show Panel",
+                "icon": "$(robot)"
+            },
+            {
+                "command": "devops-agent.reviewCode",
+                "title": "DevOps Agent: Review Current File"
+            },
+            {
+                "command": "devops-agent.generateTests",
+                "title": "DevOps Agent: Generate Tests"
+            },
+            {
+                "command": "devops-agent.analyzeLogs",
+                "title": "DevOps Agent: Analyze Logs"
+            },
+            {
+                "command": "devops-agent.createPR",
+                "title": "DevOps Agent: Create Pull Request"
+            },
+            {
+                "command": "devops-agent.reviewPR",
+                "title": "DevOps Agent: Review Pull Request"
+            },
+            {
+                "command": "devops-agent.deployDocker",
+                "title": "DevOps Agent: Deploy to Docker"
+            },
+            {
+                "command": "devops-agent.deployKubernetes",
+                "title": "DevOps Agent: Deploy to Kubernetes"
+            },
+            {
+                "command": "devops-agent.monitorCI",
+                "title": "DevOps Agent: Monitor CI/CD Pipeline"
+            },
+            {
+                "command": "devops-agent.clearConversation",
+                "title": "DevOps Agent: Clear Conversation"
+            }
+        ],
+        "configuration": {
+            "title": "DevOps Agent",
+            "properties": {
+                "devopsAgent.backendUrl": {
+                    "type": "string",
+                    "default": "http://localhost:3000",
+                    "description": "URL of the DevOps Agent backend server"
+                },
+                "devopsAgent.autoConnect": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Automatically connect to backend on startup"
+                },
+                "devopsAgent.githubToken": {
+                    "type": "string",
+                    "default": "",
+                    "description": "GitHub Personal Access Token for PR operations"
+                },
+                "devopsAgent.defaultRepository": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Default GitHub repository (format: owner/repo)"
+                }
+            }
+        },
+        "keybindings": [
+            {
+                "command": "devops-agent.showPanel",
+                "key": "ctrl+shift+d",
+                "mac": "cmd+shift+d"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "package": "vsce package",
+        "lint": "eslint src --ext ts"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.17",
+        "@types/vscode": "^1.85.0",
+        "@typescript-eslint/eslint-plugin": "^6.21.0",
+        "@typescript-eslint/parser": "^6.21.0",
+        "eslint": "^8.56.0",
+        "typescript": "^5.3.3",
+        "@vscode/vsce": "^2.22.0"
+    },
+    "dependencies": {
+        "socket.io-client": "^4.6.1",
+        "axios": "^1.6.7"
+    }
+}
