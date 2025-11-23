@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: my-prototype-app
+    name: Deploy-a-prototype
     env: docker
     dockerfilePath: ./Dockerfile
     plan: free
