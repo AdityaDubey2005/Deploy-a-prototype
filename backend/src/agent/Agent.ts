@@ -52,7 +52,7 @@ export class Agent {
         history.messages.push(userMsg);
 
         let iterations = 0;
-        const maxIterations = 10; // Prevent infinite loops
+        const maxIterations = 20; // Prevent infinite loops (increased for complex workflows)
 
         while (iterations < maxIterations) {
             iterations++;

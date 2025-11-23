@@ -62,6 +62,7 @@ import {
     DockerDeployPrepTool,
     CompleteDockerDeployTool,
     DeployToCloudTool,
+    CompleteGitHubDeployTool,
 } from './agent/tools/DeploymentTool.js';
 
 // Environment configuration
@@ -154,9 +155,10 @@ async function main() {
         DockerDeployPrepTool,
         CompleteDockerDeployTool,
         DeployToCloudTool,
+        CompleteGitHubDeployTool,
     ]);
 
-    logger.info(`Registered ${37} DevOps tools`);
+    logger.info(`Registered ${38} DevOps tools`);
 
     // API routes
     app.use('/api', router);

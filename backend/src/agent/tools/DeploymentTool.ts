@@ -758,6 +758,189 @@ export const CompleteDockerDeployTool: Tool = {
     },
 };
 
+export const CompleteGitHubDeployTool: Tool = {
+    name: 'complete_github_deploy',
+    description: 'Complete GitHub deployment: creates repo, commits ALL files, pushes, and prepares for cloud deployment. Use when user wants to deploy to GitHub and cloud platforms.',
+    parameters: [
+        {
+            name: 'repoName',
+            type: 'string',
+            description: 'GitHub repository name',
+            required: true,
+        },
+        {
+            name: 'appName',
+            type: 'string',
+            description: 'Application name for cloud deployment',
+            required: false,
+        },
+    ],
+    execute: async (args: Record<string, any>, context: ToolContext): Promise<string> => {
+        const workspaceRoot = context.workspaceRoot || process.cwd();
+        const { repoName, appName = repoName } = args;
+        
+        try {
+            let result = '🚀 Complete GitHub & Cloud Deployment\n';
+            result += '='.repeat(60) + '\n\n';
+            
+            // Step 1: Initialize Git if needed
+            result += '📋 Step 1: Initializing Git...\n';
+            try {
+                execSync('git rev-parse --git-dir', { cwd: workspaceRoot, stdio: 'pipe' });
+                result += '   ✅ Git already initialized\n';
+            } catch {
+                execSync('git init', { cwd: workspaceRoot, stdio: 'pipe' });
+                result += '   ✅ Initialized Git repository\n';
+            }
+            
+            // Step 2: Create GitHub repo
+            result += '\n📦 Step 2: Creating GitHub repository...\n';
+            const githubToken = process.env.GITHUB_TOKEN;
+            if (!githubToken) {
+                result += '   ❌ GITHUB_TOKEN not set\n';
+                return result;
+            }
+            
+            let repoUrl = '';
+            try {
+                const { Octokit } = await import('@octokit/rest');
+                const octokit = new Octokit({ auth: githubToken });
+                
+                const response = await octokit.repos.createForAuthenticatedUser({
+                    name: repoName,
+                    description: `${appName} deployment`,
+                    private: false,
+                });
+                
+                repoUrl = response.data.clone_url;
+                result += `   ✅ Created repository: ${repoName}\n`;
+                result += `   🔗 URL: ${response.data.html_url}\n`;
+            } catch (error: any) {
+                if (error.status === 422) {
+                    result += `   ℹ️  Repository '${repoName}' already exists\n`;
+                    repoUrl = `https://github.com/${githubToken.split('_')[0]}/${repoName}.git`;
+                } else {
+                    result += `   ❌ Failed to create repo: ${error.message}\n`;
+                    return result;
+                }
+            }
+            
+            // Step 3: Prepare deployment files
+            result += '\n📝 Step 3: Preparing deployment files...\n';
+            const projectInfo = detectProjectType(workspaceRoot);
+            
+            const dockerfilePath = join(workspaceRoot, 'Dockerfile');
+            if (!existsSync(dockerfilePath)) {
+                writeFileSync(dockerfilePath, generateDockerfile(workspaceRoot, projectInfo));
+                result += '   ✅ Created Dockerfile\n';
+            }
+            
+            const dockerignorePath = join(workspaceRoot, '.dockerignore');
+            if (!existsSync(dockerignorePath)) {
+                writeFileSync(dockerignorePath, generateDockerignore());
+                result += '   ✅ Created .dockerignore\n';
+            }
+            
+            const renderYamlPath = join(workspaceRoot, 'render.yaml');
+            if (!existsSync(renderYamlPath)) {
+                writeFileSync(renderYamlPath, generateRenderYaml(appName, '3001'));
+                result += '   ✅ Created render.yaml\n';
+            }
+            
+            // Step 4: Configure Git remote
+            result += '\n🔗 Step 4: Configuring Git remote...\n';
+            try {
+                execSync('git remote remove origin', { cwd: workspaceRoot, stdio: 'pipe' });
+            } catch {
+                // Remote doesn't exist, that's fine
+            }
+            
+            execSync(`git remote add origin ${repoUrl}`, { cwd: workspaceRoot, stdio: 'pipe' });
+            result += `   ✅ Added remote: origin\n`;
+            
+            // Step 5: Commit and push ALL files
+            result += '\n💾 Step 5: Committing and pushing ALL files...\n';
+            try {
+                // Add ALL files
+                execSync('git add -A', { cwd: workspaceRoot, stdio: 'pipe' });
+                result += '   ✅ Added all files\n';
+                
+                // Check if there's anything to commit
+                try {
+                    const status = execSync('git status --porcelain', {
+                        cwd: workspaceRoot,
+                        encoding: 'utf-8',
+                        stdio: 'pipe'
+                    });
+                    
+                    if (status.trim()) {
+                        // Commit
+                        execSync('git commit -m "Deploy to GitHub - All files"', {
+                            cwd: workspaceRoot,
+                            stdio: 'pipe'
+                        });
+                        result += '   ✅ Committed changes\n';
+                    } else {
+                        result += '   ℹ️  No new changes to commit\n';
+                    }
+                } catch {
+                    // Might fail if nothing to commit
+                }
+                
+                // Push with force to ensure everything goes up
+                execSync('git branch -M main', { cwd: workspaceRoot, stdio: 'pipe' });
+                execSync('git push -u origin main --force', {
+                    cwd: workspaceRoot,
+                    stdio: 'pipe',
+                    timeout: 30000
+                });
+                result += '   ✅ Pushed to GitHub (main branch)\n';
+                
+                // Get file count
+                const files = execSync('git ls-files', {
+                    cwd: workspaceRoot,
+                    encoding: 'utf-8',
+                    stdio: 'pipe'
+                }).split('\n').filter(f => f.trim());
+                
+                result += `   📊 Total files pushed: ${files.length}\n`;
+                
+            } catch (error: any) {
+                result += `   ❌ Git operations failed: ${error.message}\n`;
+                result += '\n💡 Try manually:\n';
+                result += `   git add -A\n`;
+                result += `   git commit -m "Deploy to GitHub"\n`;
+                result += `   git push -u origin main --force\n`;
+                return result;
+            }
+            
+            // Step 6: Deployment instructions
+            result += '\n━'.repeat(60) + '\n';
+            result += '🎉 SUCCESS! Repository Ready for Cloud Deployment\n';
+            result += '━'.repeat(60) + '\n\n';
+            result += `📦 Repository: https://github.com/AdityaDubey2005/${repoName}\n`;
+            result += `🌐 Cloud Deploy: https://${appName}.onrender.com\n\n`;
+            
+            result += '🚀 Deploy to Render.com (2 minutes):\n';
+            result += '1. Visit: https://render.com\n';
+            result += '2. Click "New +" → "Web Service"\n';
+            result += '3. Connect GitHub → Select ' + repoName + '\n';
+            result += '4. Render auto-detects Dockerfile\n';
+            result += '5. Click "Create Web Service"\n';
+            result += `6. Your app will be live at: https://${appName}.onrender.com\n\n`;
+            
+            result += '✅ All files are now in GitHub\n';
+            result += '✅ Docker configuration ready\n';
+            result += '✅ Render.com configuration ready\n';
+            
+            return result;
+        } catch (error: any) {
+            logger.error('Complete GitHub deploy failed:', error);
+            return `❌ Deployment failed: ${error.message}`;
+        }
+    },
+};
+
 export const DeployToCloudTool: Tool = {
     name: 'deploy_to_cloud',
     description: 'Deploy project to cloud platform (Render.com) for public access. Creates deployment files, pushes to GitHub, and provides deployment URL. Use when user wants a shareable public link.',
@@ -916,3 +1099,4 @@ export const DeployToCloudTool: Tool = {
         }
     },
 };
+
