@@ -88,6 +88,11 @@ app.get('/health', (req, res) => {
     res.json({ status: 'OK', todos: todos.length });
 });
 
+// Root endpoint - Serve your existing index.html from public folder
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.listen(PORT, () => {
     console.log(`Todo API server running on http://localhost:${PORT}`);
 });
