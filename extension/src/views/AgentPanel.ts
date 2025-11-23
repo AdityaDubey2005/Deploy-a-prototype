@@ -107,6 +107,8 @@ export class AgentPanel {
     }
   }
 
+
+
   private addMessage(message: AgentMessage) {
     this.panel.webview.postMessage({
       type: 'addMessage',

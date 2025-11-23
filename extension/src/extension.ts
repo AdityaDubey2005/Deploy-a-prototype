@@ -12,98 +12,103 @@ import {
     registerDeployKubernetesCommand,
     registerMonitorCICommand,
     registerClearConversationCommand,
+    registerViewCostsCommand,
+    registerPrePushCheckCommand,
+    registerRunTestsCommand,
+    registerGitFetchCommand,
+    registerPrepareDockerDeployCommand,
 } from './commands/index';
 
 let backendClient: BackendClient;
 let configManager: ConfigManager;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('DevOps Agent Extension is now active');
+    try {
+        console.log('DevOps Agent Extension is now active');
 
-    // Initialize managers
-    configManager = new ConfigManager();
-    backendClient = new BackendClient();
+        // Initialize managers
+        configManager = new ConfigManager();
+        backendClient = new BackendClient();
 
-    // Register show panel command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('devops-agent.showPanel', async () => {
-            AgentPanel.createOrShow(context.extensionUri, backendClient);
-            // Try to connect if not already connected
-            if (!backendClient.isConnected()) {
-                try {
-                    await backendClient.connect();
-                } catch (error) {
-                    // Silently fail - the panel will show disconnected status
-                    console.log('Failed to auto-connect:', error);
+        // Register show panel command
+        context.subscriptions.push(
+            vscode.commands.registerCommand('devops-agent.showPanel', async () => {
+                AgentPanel.createOrShow(context.extensionUri, backendClient);
+                // Try to connect if not already connected
+                if (!backendClient.isConnected()) {
+                    try {
+                        await backendClient.connect();
+                    } catch (error) {
+                        // Silently fail - the panel will show disconnected status
+                        console.log('Failed to auto-connect:', error);
+                    }
                 }
-            }
-        })
-    );
+            })
+        );
 
-    // Register all DevOps commands
-    context.subscriptions.push(
-        registerReviewCodeCommand(backendClient),
-        registerGenerateTestsCommand(backendClient),
-        registerAnalyzeLogsCommand(backendClient),
-        registerCreatePRCommand(backendClient),
-        registerReviewPRCommand(backendClient),
-        registerDeployDockerCommand(backendClient),
-        registerDeployKubernetesCommand(backendClient),
-        registerMonitorCICommand(backendClient),
-        registerClearConversationCommand(backendClient)
-    );
+        // Register all DevOps commands
+        context.subscriptions.push(
+            registerReviewCodeCommand(backendClient),
+            registerGenerateTestsCommand(backendClient),
+            registerAnalyzeLogsCommand(backendClient),
+            registerCreatePRCommand(backendClient),
+            registerReviewPRCommand(backendClient),
+            registerDeployDockerCommand(backendClient),
+            registerDeployKubernetesCommand(backendClient),
+            registerMonitorCICommand(backendClient),
+            registerClearConversationCommand(backendClient),
+            registerViewCostsCommand(backendClient),
+            registerPrePushCheckCommand(backendClient),
+            registerRunTestsCommand(backendClient),
+            registerGitFetchCommand(backendClient),
+            registerPrepareDockerDeployCommand(backendClient)
+        );
 
-    // Auto-connect has been disabled to prevent extension startup delays
-    // Connection will be established when the user opens the panel
-    /* if (configManager.getAutoConnect()) {
+        // Register status bar item
+        const statusBarItem = vscode.window.createStatusBarItem(
+            vscode.StatusBarAlignment.Right,
+            100
+        );
+        statusBarItem.text = '$(robot) DevOps Agent';
+        statusBarItem.command = 'devops-agent.showPanel';
+        statusBarItem.tooltip = 'Open DevOps Agent';
+        statusBarItem.show();
+        context.subscriptions.push(statusBarItem);
+
+        // Update status bar on connection changes
+        backendClient.on('connected', () => {
+            statusBarItem.text = '$(robot) DevOps Agent $(check)';
+            statusBarItem.tooltip = 'DevOps Agent (Connected)';
+        });
+
+        backendClient.on('disconnected', () => {
+            statusBarItem.text = '$(robot) DevOps Agent $(x)';
+            statusBarItem.tooltip = 'DevOps Agent (Disconnected)';
+        });
+
+        // Listen for configuration changes
+        context.subscriptions.push(
+            vscode.workspace.onDidChangeConfiguration((e) => {
+                if (e.affectsConfiguration('devopsAgent.backendUrl')) {
+                    configManager.refresh();
+                    const newUrl = configManager.getBackendUrl();
+                    backendClient.updateBackendUrl(newUrl);
+                    vscode.window.showInformationMessage(
+                        `Backend URL updated to ${newUrl}. Reconnection required.`
+                    );
+                }
+            })
+        );
+
+        console.log('DevOps Agent Extension fully activated');
+    } catch (err: any) {
+        console.error('Extension activation failed:', err);
         try {
-            await backendClient.connect();
-            console.log('Auto-connected to backend');
-        } catch (error: any) {
-            vscode.window.showWarningMessage(
-                `Failed to connect to DevOps Agent backend. Please ensure the server is running on ${configManager.getBackendUrl()}`
-            );
+            vscode.window.showErrorMessage(`DevOps Agent failed to activate: ${err?.message || err}`);
+        } catch (e) {
+            // ignore errors showing message
         }
-    } */
-
-
-    // Register status bar item
-    const statusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right,
-        100
-    );
-    statusBarItem.text = '$(robot) DevOps Agent';
-    statusBarItem.command = 'devops-agent.showPanel';
-    statusBarItem.tooltip = 'Open DevOps Agent';
-    statusBarItem.show();
-    context.subscriptions.push(statusBarItem);
-
-    // Update status bar on connection changes
-    backendClient.on('connected', () => {
-        statusBarItem.text = '$(robot) DevOps Agent $(check)';
-        statusBarItem.tooltip = 'DevOps Agent (Connected)';
-    });
-
-    backendClient.on('disconnected', () => {
-        statusBarItem.text = '$(robot) DevOps Agent $(x)';
-        statusBarItem.tooltip = 'DevOps Agent (Disconnected)';
-    });
-
-    // Listen for configuration changes
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('devopsAgent.backendUrl')) {
-                configManager.refresh();
-                const newUrl = configManager.getBackendUrl();
-                backendClient.updateBackendUrl(newUrl);
-                vscode.window.showInformationMessage(
-                    `Backend URL updated to ${newUrl}. Reconnection required.`
-                );
-            }
-        })
-    );
-
-    console.log('DevOps Agent Extension fully activated');
+    }
 }
 
 export function deactivate() {

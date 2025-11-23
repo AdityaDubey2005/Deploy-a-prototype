@@ -8,6 +8,7 @@ import {
     Tool,
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { CostTracker } from './tools/CostTrackingTool.js';
 
 export class AIProvider {
     private config: AgentConfig;
@@ -111,10 +112,15 @@ export class AIProvider {
                 parameters: {
                     type: 'object',
                     properties: Object.fromEntries(
-                        tool.parameters.map((p) => [
-                            p.name,
-                            { type: p.type, description: p.description, ...(p.enum && { enum: p.enum }) },
-                        ])
+                        tool.parameters.map((p) => {
+                            const propDef: any = {
+                                type: p.type,
+                                description: p.description,
+                            };
+                            if (p.enum) propDef.enum = p.enum;
+                            if (p.type === 'array') propDef.items = { type: 'string' };
+                            return [p.name, propDef];
+                        })
                     ),
                     required: tool.parameters.filter((p) => p.required).map((p) => p.name),
                 },
@@ -128,6 +134,18 @@ export class AIProvider {
             temperature: this.config.temperature || 0.7,
             max_tokens: this.config.maxTokens || 2000,
         });
+
+        // Track API costs
+        if (response.usage) {
+            const costTracker = CostTracker.getInstance();
+            await costTracker.trackRequest(
+                'openai',
+                this.config.model,
+                response.usage.prompt_tokens || 0,
+                response.usage.completion_tokens || 0,
+                messages[messages.length - 1]?.content || 'API call'
+            );
+        }
 
         const choice = response.choices[0];
         const message = choice.message;
@@ -169,10 +187,15 @@ export class AIProvider {
             input_schema: {
                 type: 'object' as const,
                 properties: Object.fromEntries(
-                    tool.parameters.map((p) => [
-                        p.name,
-                        { type: p.type, description: p.description },
-                    ])
+                    tool.parameters.map((p) => {
+                        const propDef: any = {
+                            type: p.type,
+                            description: p.description,
+                        };
+                        if (p.enum) propDef.enum = p.enum;
+                        if (p.type === 'array') propDef.items = { type: 'string' };
+                        return [p.name, propDef];
+                    })
                 ),
                 required: tool.parameters.filter((p) => p.required).map((p) => p.name),
             },
@@ -253,45 +276,91 @@ export class AIProvider {
                 parameters: {
                     type: 'object',
                     properties: Object.fromEntries(
-                        tool.parameters.map((p) => [
-                            p.name,
-                            { type: p.type, description: p.description, ...(p.enum && { enum: p.enum }) },
-                        ])
+                        tool.parameters.map((p) => {
+                            const propDef: any = {
+                                type: p.type,
+                                description: p.description,
+                            };
+                            if (p.enum) propDef.enum = p.enum;
+                            if (p.type === 'array') propDef.items = { type: 'string' };
+                            return [p.name, propDef];
+                        })
                     ),
                     required: tool.parameters.filter((p) => p.required).map((p) => p.name),
                 },
             },
         }));
 
-        const response = await this.groq.chat.completions.create({
-            model: this.config.model,
-            messages: formattedMessages,
-            tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
-            temperature: this.config.temperature || 0.7,
-            max_tokens: this.config.maxTokens || 2000,
-        });
+        try {
+            const response = await this.groq.chat.completions.create({
+                model: this.config.model,
+                messages: formattedMessages,
+                tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
+                temperature: this.config.temperature || 0.7,
+                max_tokens: this.config.maxTokens || 2000,
+            });
 
-        const choice = response.choices[0];
-        const message = choice.message;
+            const choice = response.choices[0];
+            const message = choice.message;
 
-        const agentMessage: AgentMessage = {
-            id: response.id || `groq-${Date.now()}`,
-            role: 'assistant',
-            content: message.content || '',
-            timestamp: Date.now(),
-        };
+            const agentMessage: AgentMessage = {
+                id: response.id || `groq-${Date.now()}`,
+                role: 'assistant',
+                content: message.content || '',
+                timestamp: Date.now(),
+            };
 
-        if (message.tool_calls && message.tool_calls.length > 0) {
-            agentMessage.toolCalls = message.tool_calls
-                .filter((tc) => tc.function)
-                .map((tc) => ({
-                    id: tc.id || `call-${Date.now()}`,
-                    name: tc.function!.name || '',
-                    arguments: JSON.parse(tc.function!.arguments || '{}'),
-                }));
+            if (message.tool_calls && message.tool_calls.length > 0) {
+                agentMessage.toolCalls = message.tool_calls
+                    .filter((tc) => tc.function)
+                    .map((tc) => {
+                        try {
+                            return {
+                                id: tc.id || `call-${Date.now()}`,
+                                name: tc.function!.name || '',
+                                arguments: JSON.parse(tc.function!.arguments || '{}'),
+                            };
+                        } catch (parseError) {
+                            logger.error('Failed to parse tool call arguments', {
+                                toolCall: tc,
+                                error: parseError,
+                            });
+                            return null;
+                        }
+                    })
+                    .filter((tc): tc is NonNullable<typeof tc> => tc !== null);
+            }
+
+            return agentMessage;
+        } catch (error: any) {
+            // Handle Groq function calling errors
+            if (error.status === 400 && error.error?.code === 'tool_use_failed') {
+                logger.error('Groq function calling failed, retrying without tools', {
+                    error: error.error,
+                    model: this.config.model,
+                });
+
+                // Retry without tools - fallback to text-only response
+                const fallbackResponse = await this.groq.chat.completions.create({
+                    model: this.config.model,
+                    messages: formattedMessages,
+                    temperature: this.config.temperature || 0.7,
+                    max_tokens: this.config.maxTokens || 2000,
+                });
+
+                const fallbackMessage = fallbackResponse.choices[0].message;
+
+                return {
+                    id: fallbackResponse.id || `groq-${Date.now()}`,
+                    role: 'assistant',
+                    content: fallbackMessage.content || 'I apologize, but I encountered an issue with function calling. Please try rephrasing your request or use a different command.',
+                    timestamp: Date.now(),
+                };
+            }
+
+            // Re-throw other errors
+            throw error;
         }
-
-        return agentMessage;
     }
 
     private async generateOllamaResponse(
@@ -325,15 +394,50 @@ export class AIProvider {
     }
 
     private getDefaultSystemPrompt(): string {
-        return `You are an expert DevOps AI assistant integrated into a developer's VS Code environment. Your role is to help with:
+        return `You are an expert DevOps AI assistant integrated into a developer's VS Code environment.
+
+UNDERSTANDING USER'S PROJECT:
+- When user asks "What is this project?" or "What does this file do?" → Use list_files and read_file tools to explore
+- Build context by reading key files: README.md, package.json, main source files
+- Remember file contents and project structure from conversation history
+- Provide intelligent answers based on actual code you've read
+- If you don't know about a file, offer to read it first
+
+COMMUNICATION STYLE:
+- Be conversational, intelligent, and direct
+- Answer questions naturally - use tools when needed to gather context
+- Proactively explore the project when asked about it
+- Reference specific code, functions, and files you've seen
+- Be concise and helpful
+
+WHEN TO USE TOOLS:
+✅ USE tools when:
+- User asks "What is this project?" → List files, read README/package.json to understand
+- User asks "What does X file do?" → Read that file and explain its purpose
+- User asks "How does Y function work?" → Read the file containing Y and explain
+- User explicitly asks to review/analyze/generate code
+- You need to read, write, or modify files
+- Performing Git operations, Docker deployments, CI/CD monitoring
+- Accessing real-time data (logs, costs, test results)
+
+❌ DON'T use tools when:
+- User asks general programming questions ("What is Docker?", "How does REST API work?")
+- You can answer from general knowledge or conversation context
+- User is having a normal conversation about concepts
+
+YOUR CAPABILITIES:
+- Project exploration and code understanding
 - Code review and quality analysis
-- Test generation and execution
+- Test generation and execution  
 - Log analysis and debugging
-- GitHub operations (PR creation, review)
+- Git & GitHub operations (commits, PRs, fetch, push)
 - Docker and Kubernetes deployments
 - CI/CD pipeline monitoring
-- Incident detection and root cause analysis
+- API cost tracking and analysis
+- Pre-push validation
 
-You have access to various tools to perform these tasks. Always explain your reasoning and provide actionable recommendations. When suggesting code changes, be specific and provide examples.`;
+IMPORTANT: When a user opens your extension in a new project, proactively explore it to understand the codebase. Use list_files to see structure, read key files like README, package.json, main entry points. Build a mental model of the project so you can answer questions intelligently.
+
+Be helpful, intelligent, and actually understand the user's code by reading it.`;
     }
 }

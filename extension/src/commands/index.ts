@@ -15,6 +15,8 @@ export function registerReviewCodeCommand(client: BackendClient): vscode.Disposa
             ? vscode.workspace.asRelativePath(document.uri)
             : document.fileName;
 
+        const absolutePath = document.uri.fsPath;
+
         try {
             await vscode.window.withProgress(
                 {
@@ -24,7 +26,7 @@ export function registerReviewCodeCommand(client: BackendClient): vscode.Disposa
                 },
                 async () => {
                     await client.sendMessage(
-                        `Please review the code in ${relativePath} and provide feedback on security, performance, style, and best practices.`
+                        `Please review the code in file "${relativePath}" (located at "${absolutePath}"). Check for security issues, performance problems, code style, and best practices. Provide specific recommendations.`
                     );
                 }
             );
@@ -48,6 +50,8 @@ export function registerGenerateTestsCommand(client: BackendClient): vscode.Disp
             ? vscode.workspace.asRelativePath(document.uri)
             : document.fileName;
 
+        const absolutePath = document.uri.fsPath;
+
         const framework = await vscode.window.showQuickPick(['jest', 'mocha', 'vitest'], {
             placeHolder: 'Select testing framework',
         });
@@ -63,7 +67,7 @@ export function registerGenerateTestsCommand(client: BackendClient): vscode.Disp
                 },
                 async () => {
                     await client.sendMessage(
-                        `Please generate ${framework} tests for ${relativePath}. Create comprehensive test cases.`
+                        `Generate comprehensive ${framework} tests for the file "${relativePath}" (${absolutePath}). Include edge cases, error scenarios, and good coverage.`
                     );
                 }
             );
@@ -89,6 +93,8 @@ export function registerAnalyzeLogsCommand(client: BackendClient): vscode.Dispos
             ? vscode.workspace.asRelativePath(uris[0])
             : uris[0].fsPath;
 
+        const absolutePath = uris[0].fsPath;
+
         try {
             await vscode.window.withProgress(
                 {
@@ -98,7 +104,7 @@ export function registerAnalyzeLogsCommand(client: BackendClient): vscode.Dispos
                 },
                 async () => {
                     await client.sendMessage(
-                        `Please analyze the log file at ${relativePath} and identify errors, patterns, and provide recommendations.`
+                        `Analyze the log file "${relativePath}" (${absolutePath}). Identify errors, patterns, anomalies, and provide actionable recommendations to fix issues.`
                     );
                 }
             );
@@ -318,5 +324,142 @@ export function registerClearConversationCommand(client: BackendClient): vscode.
     return vscode.commands.registerCommand('devops-agent.clearConversation', () => {
         client.clearConversation();
         vscode.window.showInformationMessage('Conversation cleared');
+    });
+}
+
+export function registerViewCostsCommand(client: BackendClient): vscode.Disposable {
+    return vscode.commands.registerCommand('devops-agent.viewCosts', async () => {
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Loading API cost data...',
+                    cancellable: false,
+                },
+                async () => {
+                    await client.sendMessage(
+                        'Show me my API usage costs with a breakdown by provider and model. Include today, this week, and this month.'
+                    );
+                }
+            );
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Failed to load costs: ${error.message}`);
+        }
+    });
+}
+
+export function registerPrePushCheckCommand(client: BackendClient): vscode.Disposable {
+    return vscode.commands.registerCommand('devops-agent.prePushCheck', async () => {
+        const autoFix = await vscode.window.showQuickPick(
+            ['Yes - Auto-fix linting issues', 'No - Only report issues'],
+            { placeHolder: 'Auto-fix linting issues?' }
+        );
+
+        if (!autoFix) return;
+
+        const shouldAutoFix = autoFix.startsWith('Yes');
+
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Running pre-push validation...',
+                    cancellable: false,
+                },
+                async () => {
+                    await client.sendMessage(
+                        `Run pre-push validation on my code. Check git status, run linting${shouldAutoFix ? ' and auto-fix issues' : ''}, execute tests, check for sensitive data, and verify the build. Tell me if it's safe to push.`
+                    );
+                }
+            );
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Pre-push validation failed: ${error.message}`);
+        }
+    });
+}
+
+export function registerRunTestsCommand(client: BackendClient): vscode.Disposable {
+    return vscode.commands.registerCommand('devops-agent.runTests', async () => {
+        const withCoverage = await vscode.window.showQuickPick(
+            ['Yes - With coverage report', 'No - Standard test run'],
+            { placeHolder: 'Run with coverage?' }
+        );
+
+        if (!withCoverage) return;
+
+        const coverage = withCoverage.startsWith('Yes');
+
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Running tests...',
+                    cancellable: false,
+                },
+                async () => {
+                    await client.sendMessage(
+                        `Run all tests in this project${coverage ? ' with a coverage report' : ''}. Show me the results with pass/fail counts.`
+                    );
+                }
+            );
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Test execution failed: ${error.message}`);
+        }
+    });
+}
+
+export function registerGitFetchCommand(client: BackendClient): vscode.Disposable {
+    return vscode.commands.registerCommand('devops-agent.gitFetch', async () => {
+        const prune = await vscode.window.showQuickPick(
+            ['Yes - Prune deleted branches', 'No - Standard fetch'],
+            { placeHolder: 'Prune deleted remote branches?' }
+        );
+
+        if (!prune) return;
+
+        const shouldPrune = prune.startsWith('Yes');
+
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Fetching from remote...',
+                    cancellable: false,
+                },
+                async () => {
+                    await client.sendMessage(
+                        `Fetch the latest changes from origin${shouldPrune ? ' and prune deleted branches' : ''}. Let me know what was updated.`
+                    );
+                }
+            );
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Git fetch failed: ${error.message}`);
+        }
+    });
+}
+
+export function registerPrepareDockerDeployCommand(client: BackendClient): vscode.Disposable {
+    return vscode.commands.registerCommand('devops-agent.prepareDockerDeploy', async () => {
+        const appName = await vscode.window.showInputBox({
+            prompt: 'Enter application name for deployment (leave empty for default)',
+            placeHolder: 'my-app',
+        });
+
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Preparing Docker deployment...',
+                    cancellable: false,
+                },
+                async () => {
+                    await client.sendMessage(
+                        `Prepare this project for Docker deployment${appName ? ` with the name "${appName}"` : ''}. Auto-generate Dockerfile, .dockerignore, render.yaml, and deployment guide. Make sure everything is ready for cloud deployment.`
+                    );
+                }
+            );
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Deployment preparation failed: ${error.message}`);
+        }
     });
 }

@@ -60,7 +60,12 @@ export class BackendClient extends EventEmitter {
 
             this.socket.on('error', (error: any) => {
                 this.emit('error', error);
-                vscode.window.showErrorMessage(`DevOps Agent Error: ${error.error || 'Unknown error'}`);
+                const errorMsg = this.formatErrorMessage(error);
+                vscode.window.showErrorMessage(`DevOps Agent Error: ${errorMsg}`, 'View Details').then(selection => {
+                    if (selection === 'View Details') {
+                        this.showDetailedError(error);
+                    }
+                });
             });
 
             this.socket.on('disconnect', () => {
@@ -152,5 +157,51 @@ export class BackendClient extends EventEmitter {
         if (this.connected) {
             this.disconnect();
         }
+    }
+
+    private formatErrorMessage(error: any): string {
+        if (error.error?.error?.message) {
+            return error.error.error.message;
+        }
+        if (error.error?.message) {
+            return error.error.message;
+        }
+        if (error.message) {
+            return error.message;
+        }
+        return 'Unknown error occurred';
+    }
+
+    private showDetailedError(error: any): void {
+        const channel = vscode.window.createOutputChannel('DevOps Agent - Error Details');
+        channel.clear();
+        channel.appendLine('DevOps Agent Error Details');
+        channel.appendLine('='.repeat(50));
+        channel.appendLine('');
+        
+        if (error.error?.error) {
+            const apiError = error.error.error;
+            channel.appendLine(`Type: ${apiError.type || 'Unknown'}`);
+            channel.appendLine(`Code: ${apiError.code || 'Unknown'}`);
+            channel.appendLine(`Message: ${apiError.message || 'No message'}`);
+            
+            if (apiError.failed_generation) {
+                channel.appendLine('');
+                channel.appendLine('Failed Generation:');
+                channel.appendLine(apiError.failed_generation);
+            }
+        }
+        
+        if (error.stack) {
+            channel.appendLine('');
+            channel.appendLine('Stack Trace:');
+            channel.appendLine(error.stack);
+        }
+        
+        channel.appendLine('');
+        channel.appendLine('Full Error Object:');
+        channel.appendLine(JSON.stringify(error, null, 2));
+        
+        channel.show();
     }
 }

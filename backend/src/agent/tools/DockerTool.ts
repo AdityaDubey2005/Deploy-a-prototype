@@ -1,13 +1,26 @@
 import Docker from 'dockerode';
 import { Tool, ToolContext, DockerConfig } from '../../types/index.js';
 import { logger } from '../../utils/logger.js';
+import tar from 'tar-fs';
+import path from 'path';
 
 let docker: Docker | null = null;
 
 function getDocker(): Docker {
     if (!docker) {
         const host = process.env.DOCKER_HOST;
-        docker = new Docker(host ? { host } : undefined);
+        
+        // On Windows, detect Docker Desktop and use appropriate connection
+        if (process.platform === 'win32') {
+            // Try Docker Desktop's named pipe first (default on Windows)
+            docker = new Docker({ socketPath: '//./pipe/docker_engine' });
+        } else if (host && !host.includes('unix:[')) {
+            // Use custom host if provided and valid
+            docker = new Docker({ host });
+        } else {
+            // Use defaults (Unix socket on Linux/Mac)
+            docker = new Docker();
+        }
     }
     return docker;
 }
@@ -71,10 +84,10 @@ export const DockerDeployTool: Tool = {
             if (buildContext) {
                 logger.info(`Building Docker image ${fullImageName} from ${buildContext}`);
 
-                const stream = await client.buildImage({
-                    context: buildContext,
-                    src: ['Dockerfile'],
-                }, {
+                // Create a tar stream of the build context
+                const tarStream = tar.pack(path.resolve(buildContext));
+                
+                const stream = await client.buildImage(tarStream, {
                     t: fullImageName,
                 });
 
@@ -108,10 +121,23 @@ export const DockerDeployTool: Tool = {
             const portBindings: any = {};
             const exposedPorts: any = {};
 
-            for (const portMap of ports) {
-                const containerPort = `${portMap.container}/tcp`;
-                exposedPorts[containerPort] = {};
-                portBindings[containerPort] = [{ HostPort: portMap.host.toString() }];
+            for (const portMapping of ports) {
+                // Handle both "host:container" string format and {host, container} object format
+                let hostPort: string;
+                let containerPort: string;
+
+                if (typeof portMapping === 'string') {
+                    const parts = portMapping.split(':');
+                    hostPort = parts[0];
+                    containerPort = parts[1] || parts[0];
+                } else {
+                    hostPort = portMapping.host.toString();
+                    containerPort = portMapping.container.toString();
+                }
+
+                const containerPortKey = `${containerPort}/tcp`;
+                exposedPorts[containerPortKey] = {};
+                portBindings[containerPortKey] = [{ HostPort: hostPort }];
             }
 
             // Prepare environment

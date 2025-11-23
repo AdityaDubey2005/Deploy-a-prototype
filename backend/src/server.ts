@@ -46,13 +46,28 @@ import {
     GitBranchTool,
     GitPushTool,
     GitPullTool,
+    GitFetchTool,
     GitStatusTool,
 } from './agent/tools/GitTool.js';
+import {
+    CostTrackingTool,
+    ResetCostsTool,
+} from './agent/tools/CostTrackingTool.js';
+import {
+    TestExecutionTool,
+    PrePushValidationTool,
+} from './agent/tools/TestExecutionTool.js';
+import {
+    AutoDeployTool,
+    DockerDeployPrepTool,
+    CompleteDockerDeployTool,
+    DeployToCloudTool,
+} from './agent/tools/DeploymentTool.js';
 
 // Environment configuration
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const AI_PROVIDER = (process.env.AI_PROVIDER || 'groq') as 'openai' | 'anthropic' | 'groq' | 'ollama';
-const AI_MODEL = process.env[`${AI_PROVIDER.toUpperCase()}_MODEL`] || 'llama3-70b-8192';
+const AI_PROVIDER = (process.env.AI_PROVIDER || 'openai') as 'openai' | 'anthropic' | 'groq' | 'ollama';
+const AI_MODEL = process.env[`${AI_PROVIDER.toUpperCase()}_MODEL`] || 'gpt-4o-mini';
 
 async function main() {
     logger.info('Starting DevOps Agent Backend...');
@@ -101,11 +116,14 @@ async function main() {
         GitBranchTool,
         GitPushTool,
         GitPullTool,
+        GitFetchTool,
         GitStatusTool,
 
         // Code analysis tools
         CodeReviewTool,
         TestGenerationTool,
+        TestExecutionTool,
+        PrePushValidationTool,
         LogAnalysisTool,
 
         // GitHub tools
@@ -126,9 +144,19 @@ async function main() {
         // CI/CD and monitoring tools
         CICDMonitorTool,
         IncidentDetectionTool,
+
+        // Cost tracking tools
+        CostTrackingTool,
+        ResetCostsTool,
+        
+        // Auto-deployment tools
+        AutoDeployTool,
+        DockerDeployPrepTool,
+        CompleteDockerDeployTool,
+        DeployToCloudTool,
     ]);
 
-    logger.info(`Registered ${28} DevOps tools`);
+    logger.info(`Registered ${37} DevOps tools`);
 
     // API routes
     app.use('/api', router);

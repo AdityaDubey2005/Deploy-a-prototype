@@ -76,15 +76,20 @@ export class Agent {
                     toolResults.push(result);
                 }
 
-                // Add tool results to history
-                const toolResultMessage: AgentMessage = {
-                    id: nanoid(),
-                    role: 'tool',
-                    content: JSON.stringify(toolResults),
-                    timestamp: Date.now(),
-                    toolResults,
-                };
-                history.messages.push(toolResultMessage);
+                // Add tool results to history as individual tool messages for each result
+                // This is required by OpenAI's API format
+                for (const toolResult of toolResults) {
+                    const toolResultMessage: AgentMessage = {
+                        id: toolResult.id, // Use the tool call ID
+                        role: 'tool',
+                        content: typeof toolResult.result === 'string' 
+                            ? toolResult.result 
+                            : JSON.stringify(toolResult.error || toolResult.result),
+                        timestamp: Date.now(),
+                        toolResults: [toolResult],
+                    };
+                    history.messages.push(toolResultMessage);
+                }
 
                 // Continue loop to get final response
                 continue;

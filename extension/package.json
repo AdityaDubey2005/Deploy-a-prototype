@@ -31,6 +31,10 @@
                 "title": "DevOps Agent: Generate Tests"
             },
             {
+                "command": "devops-agent.runTests",
+                "title": "DevOps Agent: Run Tests"
+            },
+            {
                 "command": "devops-agent.analyzeLogs",
                 "title": "DevOps Agent: Analyze Logs"
             },
@@ -43,8 +47,16 @@
                 "title": "DevOps Agent: Review Pull Request"
             },
             {
+                "command": "devops-agent.gitFetch",
+                "title": "DevOps Agent: Git Fetch"
+            },
+            {
                 "command": "devops-agent.deployDocker",
                 "title": "DevOps Agent: Deploy to Docker"
+            },
+            {
+                "command": "devops-agent.prepareDockerDeploy",
+                "title": "DevOps Agent: Prepare Docker Deployment"
             },
             {
                 "command": "devops-agent.deployKubernetes",
@@ -53,6 +65,14 @@
             {
                 "command": "devops-agent.monitorCI",
                 "title": "DevOps Agent: Monitor CI/CD Pipeline"
+            },
+            {
+                "command": "devops-agent.prePushCheck",
+                "title": "DevOps Agent: Pre-Push Validation"
+            },
+            {
+                "command": "devops-agent.viewCosts",
+                "title": "DevOps Agent: View API Costs"
             },
             {
                 "command": "devops-agent.clearConversation",
@@ -81,6 +101,22 @@
                     "type": "string",
                     "default": "",
                     "description": "Default GitHub repository (format: owner/repo)"
+                },
+                "devopsAgent.showDetailedErrors": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show detailed error information in output channel"
+                },
+                "devopsAgent.aiProvider": {
+                    "type": "string",
+                    "enum": ["openai", "anthropic", "groq", "ollama"],
+                    "default": "openai",
+                    "description": "AI provider to use (requires backend restart)"
+                },
+                "devopsAgent.modelName": {
+                    "type": "string",
+                    "default": "gpt-4o-mini",
+                    "description": "AI model name (gpt-4o-mini, gpt-4, claude-3-sonnet, llama-3.1-70b-versatile)"
                 }
             }
         },

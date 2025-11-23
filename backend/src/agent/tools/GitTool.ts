@@ -364,6 +364,52 @@ export const GitPullTool: Tool = {
     }
 };
 
+// Fetch from remote
+export const GitFetchTool: Tool = {
+    name: 'git_fetch',
+    description: 'Fetch changes from remote repository without merging',
+    parameters: [
+        {
+            name: 'remote',
+            type: 'string',
+            description: 'Remote name (default: origin)',
+            required: false
+        },
+        {
+            name: 'branch',
+            type: 'string',
+            description: 'Branch name to fetch (default: all branches)',
+            required: false
+        },
+        {
+            name: 'prune',
+            type: 'boolean',
+            description: 'Remove remote-tracking references that no longer exist',
+            required: false
+        }
+    ],
+    execute: async (args: Record<string, any>, context: any): Promise<string> => {
+        const { remote = 'origin', branch = '', prune = false } = args;
+        const workspaceRoot = context.workspaceRoot || process.cwd();
+
+        try {
+            let command = `git fetch ${remote}`;
+            if (branch) {
+                command += ` ${branch}`;
+            }
+            if (prune) {
+                command += ' --prune';
+            }
+
+            const output = execSync(command, { cwd: workspaceRoot, encoding: 'utf-8' });
+            logger.info(`Fetched from ${remote}${branch ? `/${branch}` : ''}`);
+            return `✅ Fetched from ${remote}${branch ? `/${branch}` : ''}:\n${output || 'Already up to date'}`;
+        } catch (error: any) {
+            return `❌ Fetch failed: ${error.message}`;
+        }
+    }
+};
+
 // Get Git status
 export const GitStatusTool: Tool = {
     name: 'git_status',

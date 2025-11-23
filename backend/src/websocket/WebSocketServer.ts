@@ -120,11 +120,16 @@ export class WebSocketServer {
                 }
             );
 
-            // Send response
+            // Send response with proper formatting
+            const formattedResponse = {
+                ...response,
+                content: response.content // Preserve all formatting including \n, \t, etc.
+            };
+            
             const responseMessage: WSMessage = {
                 type: 'agent_response',
                 payload: {
-                    message: response,
+                    message: formattedResponse,
                     sessionId,
                 },
                 requestId,
